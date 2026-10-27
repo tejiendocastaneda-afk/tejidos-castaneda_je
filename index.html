@@ -35,7 +35,9 @@ main{max-width:1060px;margin:0 auto;padding:18px 16px 40px;display:grid;grid-tem
 .prod[hidden]{display:none}
 .stage{touch-action:pan-y;position:relative;aspect-ratio:1/.86;perspective:1100px;overflow:hidden;border-radius:6px;background:radial-gradient(circle at 50% 40%,#1d4a39,var(--noche))}
 .card{position:absolute;left:50%;top:50%;height:82%;aspect-ratio:3/4;border-radius:8px;overflow:hidden;background:#0a1712;box-shadow:0 12px 30px rgba(0,0,0,.5);transition:transform .45s ease,opacity .45s ease,filter .45s ease;cursor:pointer}
-.card img{width:100%;height:100%;object-fit:cover;display:block}
+.card img{position:absolute;inset:0;width:100%;height:100%;display:block}
+.card .fondo{object-fit:cover;filter:blur(14px) brightness(.55);transform:scale(1.2)}
+.card .foto{object-fit:contain}
 .flecha,.lupa{position:absolute;z-index:20;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;border:1px solid var(--oro);background:rgba(13,33,26,.82);color:var(--oro2)}
 .flecha:hover,.lupa:hover{background:var(--oro);color:var(--noche)}
 .flecha.izq{left:8px;top:50%;margin-top:-20px}
@@ -164,9 +166,13 @@ const ABONO_PORCENTAJE = 50;       // % del total que se pide como abono para se
    unitario: precio de 1 unidad | mayorista: precio por unidad desde "desde" unidades del mismo producto
    tallas: ["S","M","L"] o [] si no tiene | fotos: carpeta:numeros; las fotos de cada producto van en fotos/navidad/ */
 const PRODUCTOS=[
-  {id:"buso-navideno",nombre:"Buso navideño",cat:"Busos",fotos:"buso-navideno:01,02,03,04,05,06,07,08,09,10,11;buso-hilo-lana:01,02,03,04,05,06,07,08",unitario:58000,mayorista:38000,desde:6,tallas:[]},
+  {id:"buso-parejas",nombre:"Buso navideño parejas",cat:"Busos",fotos:"buso-38000:01,08,09,12,13,15,16,18,23,26,29,32",unitario:58000,mayorista:38000,desde:6,tallas:[]},
+  {id:"buso-duo",nombre:"Buso navideño dúo",cat:"Busos",fotos:"buso-38000:04,10,17,20,21,27,30",unitario:58000,mayorista:38000,desde:6,tallas:[]},
+  {id:"buso-trio",nombre:"Buso navideño trío",cat:"Busos",fotos:"buso-38000:02,03,05,22,25,28,31",unitario:58000,mayorista:38000,desde:6,tallas:[]},
+  {id:"buso-individual",nombre:"Buso navideño individual",cat:"Busos",fotos:"buso-38000:06,14,19",unitario:58000,mayorista:38000,desde:6,tallas:[]},
+  {id:"buso-variados",nombre:"Buso navideño variados",cat:"Busos",fotos:"buso-38000:07,11,24",unitario:58000,mayorista:38000,desde:6,tallas:[]},
+  {id:"buso-hilo-lana",nombre:"Buso hilo lana",cat:"Busos",fotos:"buso-hilo-lana:01,02,03,04,05,06,07,08",unitario:58000,mayorista:38000,desde:6,tallas:[]},
   {id:"buso-ecuador",nombre:"Buso Ecuador",cat:"Busos",fotos:"buso-ecuador:01,02,03,04,05,06,07,08,09",unitario:null,mayorista:null,desde:6,tallas:[]},
-  {id:"buso-crochet",nombre:"Buso crochet",cat:"Busos",fotos:"buso-crochet:01,02",unitario:null,mayorista:null,desde:6,tallas:[]},
   {id:"buso-familiar-adulto",nombre:"Buso familiar adulto",cat:"Busos",fotos:"buso-familiar-adulto:01,02,03,04,05,06,07,08",unitario:null,mayorista:null,desde:6,tallas:[]},
   {id:"buso-familiar-nino",nombre:"Buso familiar niño",cat:"Busos",fotos:"buso-familiar-nino:01,02,03,04",unitario:null,mayorista:null,desde:6,tallas:[]},
   {id:"yeti-goku",nombre:"Yeti Goku",cat:"Yetis",fotos:"yeti-goku:01,02,03",unitario:null,mayorista:null,desde:6,tallas:[]},
@@ -202,11 +208,16 @@ const I = {
 const POR_ID = Object.fromEntries(PRODUCTOS.map(p => [p.id, p]));
 const parse = s => s.split(";").flatMap(g => { const [sl, ns] = g.split(":"); return ns.split(",").map(n => ({ full:`fotos/navidad/${sl}/${sl}-${n}`, th:`fotos/navidad/${sl}/t-${n}` })); });
 /* Fotos: acepta jpg, jpeg, png, webp (en minúscula o mayúscula). Prueba una por una hasta encontrarla */
-const EXTS = ["jpg","jpeg","png","webp","JPG","JPEG","PNG","WEBP"]; let extOk = 0;
+const EXTS = ["jpg","jpeg","png","webp","JPG","JPEG","PNG","WEBP"]; let extOk = 0, aciertos = 0, fallos = 0;
 function poner(im, base){
   let k = extOk, n = 0;
-  im.onload = () => { extOk = k; };
-  im.onerror = () => { if (++n < EXTS.length) { k = (k + 1) % EXTS.length; im.src = `${base}.${EXTS[k]}`; } else im.onerror = null; };
+  im.onload = () => { extOk = k; aciertos++; };
+  im.onerror = () => {
+    fallos++; n++;
+    /* si todavía no carga ninguna foto en toda la página (aún no las subes), no se insiste: así no se saturan las peticiones */
+    if (n >= EXTS.length || (aciertos === 0 && fallos > 12)) { im.onerror = null; return; }
+    k = (k + 1) % EXTS.length; im.src = `${base}.${EXTS[k]}`;
+  };
   im.src = `${base}.${EXTS[k]}`;
 }
 const waLink = txt => `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(txt)}`;
@@ -242,31 +253,32 @@ $("#lbImg").onclick = e => {
 /* ---------- carrusel 3D ---------- */
 const POS = { 0:[0,1,0], 1:[66,.82,-30], 2:[108,.66,-38] };
 function carrusel(p, raiz){
-  const fs = parse(p.fotos), n = fs.length; let a = 0, mov = false;
+  const fs = parse(p.fotos), n = fs.length; let a = 0, mov = false, vis = false, tiraLista = false;
   raiz.innerHTML = `<div class="stage" tabindex="0" aria-label="Fotos de ${p.nombre}"><button class="flecha izq" aria-label="Foto anterior">${I.izq}</button><button class="flecha der" aria-label="Foto siguiente">${I.der}</button><button class="lupa" aria-label="Ampliar foto">${I.lupa}</button></div><p class="cuenta"></p><div class="tiras"></div>`;
   const stage = raiz.firstChild, cuenta = raiz.querySelector(".cuenta"), tiras = raiz.querySelector(".tiras");
   const cards = fs.map((f, k) => {
     const c = document.createElement("div"); c.className = "card";
-    c.innerHTML = `<img alt="${p.nombre}, foto ${k+1}" draggable="false">`;
+    c.innerHTML = `<img class="fondo" alt="" draggable="false"><img class="foto" alt="${p.nombre}, foto ${k+1}" draggable="false">`;
     c.onclick = () => { if (mov) return; k === a ? lbAbrir(fs, a, p.nombre) : ir(k); };
     stage.insertBefore(c, stage.firstChild.nextSibling ? stage.querySelector(".flecha") : null);
     return c;
   });
   const thumbs = fs.map((f, k) => {
     const b = document.createElement("button"); b.setAttribute("aria-label", `Ver foto ${k+1}`);
-    b.innerHTML = `<img loading="lazy" alt="">`; poner(b.firstChild, f.th); b.onclick = () => ir(k); tiras.appendChild(b); return b;
+    b.innerHTML = `<img loading="lazy" alt="">`; b.onclick = () => ir(k); tiras.appendChild(b); return b;
   });
   function pintar(){
     cards.forEach((c, k) => {
       let d = ((k - a) % n + n) % n; if (d > n / 2) d -= n; if (n === 2 && d === -1) d = 1;
-      const ad = Math.abs(d), im = c.firstChild;
+      const ad = Math.abs(d), im = c.lastChild;
       if (ad > 2) { c.style.opacity = 0; c.style.pointerEvents = "none"; c.style.zIndex = 0; c.style.transform = `translate(-50%,-50%) scale(.5)`; return; }
-      if (!im.dataset.p) { im.dataset.p = 1; poner(im, fs[k].full); }
+      if (vis && !im.dataset.p) { im.dataset.p = 1; poner(im, fs[k].full); im.addEventListener("load", () => { c.firstChild.src = im.currentSrc || im.src; }, { once:true }); }
       const [x, s, r] = POS[ad], sg = Math.sign(d);
       c.style.transform = `translate(-50%,-50%) translateX(${x*sg}%) rotateY(${-r*sg}deg) scale(${s})`;
       c.style.opacity = ad === 2 ? .7 : 1; c.style.zIndex = 10 - ad; c.style.pointerEvents = "auto";
       c.style.filter = ad === 0 ? "none" : "grayscale(.6) brightness(.7)";
     });
+    if (vis && !tiraLista) { tiraLista = true; thumbs.forEach((t, k) => poner(t.firstChild, fs[k].th)); }
     thumbs.forEach((t, k) => t.classList.toggle("on", k === a));
     cuenta.textContent = `Modelo ${a+1} de ${n}`;
     const t = thumbs[a]; tiras.scrollTo({ left: t.offsetLeft - tiras.clientWidth / 2 + t.clientWidth / 2, behavior:"smooth" });
@@ -281,6 +293,10 @@ function carrusel(p, raiz){
   stage.onpointercancel = () => { x0 = null; };
   stage.onpointerup = e => { if (x0 !== null && Math.abs(e.clientX - x0) > 40) { mov = true; ir(a + (e.clientX < x0 ? 1 : -1)); setTimeout(() => mov = false, 50); } x0 = null; };
   if (n === 1) raiz.querySelectorAll(".flecha").forEach(b => b.hidden = true);
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver(es => { if (es[0].isIntersecting) { vis = true; io.disconnect(); pintar(); } }, { rootMargin:"300px" });
+    io.observe(stage);
+  } else vis = true;
   pintar();
 }
 
